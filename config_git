@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""Configure global git settings.
+
+For each setting: describe it, show the desired value, then check the
+current global value. If it differs, ask before updating. If it is
+missing, install it.
+"""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+
+
+def git_config_get(key: str) -> str | None:
+    """Return the global git config value for key, or None if unset."""
+    result = subprocess.run(
+        ["git", "config", "--global", "--get", key],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.rstrip("\n")
+
+
+def git_config_set(key: str, value: str) -> None:
+    """Set a global git config value."""
+    subprocess.run(
+        ["git", "config", "--global", key, value],
+        check=True,
+    )
+
+
+def prompt_yes_no(question: str) -> bool:
+    """Ask a yes/no question on stdin. Default is no."""
+    while True:
+        answer = input(f"{question} [y/N]: ").strip().lower()
+        if answer in ("", "n", "no"):
+            return False
+        if answer in ("y", "yes"):
+            return True
+        print("Please answer y or n.")
+
+
+def ensure_setting(key: str, value: str, description: str) -> None:
+    """Ensure a global git config setting has the desired value."""
+    print()
+    print(f"Setting: {key}")
+    print(f"Purpose: {description}")
+    print(f"Desired: {key} = {value!r}")
+
+    current = git_config_get(key)
+    if current is None:
+        print("Current: <not set>")
+        git_config_set(key, value)
+        print(f"Installed {key}.")
+        return
+
+    print(f"Current: {key} = {current!r}")
+    if current == value:
+        print("Already set to desired value.")
+        return
+
+    if prompt_yes_no("Value differs. Update it?"):
+        git_config_set(key, value)
+        print(f"Updated {key}.")
+    else:
+        print(f"Left {key} unchanged.")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser."""
+    parser = argparse.ArgumentParser(
+        description="Configure global git settings interactively."
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Configure all global git settings."""
+    parser = build_parser()
+    parser.parse_args(argv)
+
+    ensure_setting(
+        "alias.vdiff",
+        "difftool -t meld -d",
+        "Run meld to show the same contents that git diff would have. "
+        "Example usage: git vdiff, git vdiff HEAD~1.",
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
